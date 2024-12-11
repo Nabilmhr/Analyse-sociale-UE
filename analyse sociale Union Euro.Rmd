@@ -1,0 +1,279 @@
+---
+title: "PROJET UE"
+author: "AYMAN YAYA ET NABIL MARHAR"
+date: '2023-04-14'
+output:
+  pdf_document: 
+    fig_caption: yes
+    fig_crop: false
+    fig_height: 4
+    fig_width: 6
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Introduction
+
+On s'intéresse à une partie des données sur les réalités sociales des pays de l'Union Européenne, afin de comparer et positionner la France dans l'Union Européenne.
+Pour cela, nous effectuerons une analyse descriptive du jeu de données.
+
+En premier lieu, nous explorerons les données en utilisant notamment des statistiques descritptives pour résumer les principales caractéristiques des données telles que la moyenne, l'écart-type, la médiane, etc.
+Ainsi, nous pourrons alors commencer à mettre en place des premières comparaisons entre la France et les autres pays.
+Dans un second temps, à l'aide de plusieurs techniques d'analyse multivariée telles que l'analyse bivariée tout d'abord,nous étudierons les différentes relations existantes entre les variables sociales françaises.Puis, à l'aide de l'ACP et de la classification non supervisée, nous pourrons explorer les relations entre les variables sociales françaises et européennes en réduisant respectivement la dimensionnalité des données et identifier les variables qui sont les plus importantes pour expliquer les différences entre les pays européens, et pouvoir ensuite regrouper les pays en fonction de leur ressemblance à partir d'un critère de proximité.
+
+Ces analyses approfondies nous permettront alors d'expliquer notre jeu de données et d'en tirer des conclusions.
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r cars, include=FALSE}
+library(FactoMineR)
+library(tidyverse)
+library(corrplot) 
+library(cowplot) 
+library(questionr)  
+library(scales) 
+library("factoextra") #pour extraire et visualiser les résultats issus de FactoMineR
+library("MASS") #pour disposer du jeu de données crabes
+library("ppcor") #pour calculer les corrélations partielles
+library("knitr") #pour avoir des sorties sous forme de tables
+library("NbClust")
+library("fossil")
+```
+
+# 1°Données et analyse bivariée
+
+Importation du jeu de données et affichage des premières lignes:
+
+```{r, echo=FALSE}
+DataUE=read.table( "dataUE.csv",sep=";",header=TRUE)
+knitr::kable(head(DataUE))
+```
+
+Dimension du Tableau:
+
+```{r, echo=FALSE}
+dim(DataUE)
+```
+
+Nous avons 9 variables et 25 observations dans notre base de données,
+
+```{r, echo=FALSE}
+str(DataUE)
+```
+
+Comparaison France/UE_Mean:
+
+```{r, echo=FALSE}
+DataUE %>% summarise_if(is.numeric,mean)
+#DataUE_france <- DataUE %>% filter(country == "fr")
+#DataUE_france
+```
+
+On peux voir par exemple que : -le taux de chômage des personnes entre 15 et 74 ans est plus élevé en France que la moyenne.
+- la part du PIB dédié aux dépenses publiques d'éducation est plus élevé en France que la moyenne.
+- la part du PIB dédié aux dépenses de protection sociale est nettement plus élevé en France que la moyenne.
+-le Produit Intérieur Brut par habitant en France est supérieur à la moyenne.
+Ces informations nous permettent de voir où la France se positionne sur différents points.
+Néanmoins, elles ne nous permettent pas de tirer une analyse sur comment se positionne la France en fonction de l'écart type de la variable.
+
+Caracteristique des données:
+
+```{r, echo=FALSE}
+summary(DataUE)
+```
+
+```{r, echo=FALSE}
+DataUE %>% summarise_if(is.numeric,sd)
+```
+
+```{r, echo=FALSE}
+DataUE %>% dplyr::select_if(is.numeric) %>% boxplot()
+```
+
+La majorité de la réalité sociale des pays européens est due à la part de bénévoles et du pib du pays.
+La variabilité de ces variable est très élevée comparée aux autres variables.
+On peut en déduire de ces deux variables l'instabilité de L'UE sur ces deux points.
+Cependant, la France est relativement stable par rapport aux autres données de ces deux variables en se positionant autour de la moyenne.
+Donc la forte variabilité de ces deux variables ne s'explique pas par les données francaise.
+
+Liens entre les variables quantitatives:
+
+```{r, echo=FALSE}
+correlation <- DataUE %>% dplyr::select_if(is.numeric) %>% cor() 
+kable(correlation,digits=3)
+```
+
+En reprenant les variables qu'on a traité précedemment (benev, PIB),on peut voir que ces deux variables sont corrélés positivement.
+Ainsi, une corrélation de 0,564 indique que les deux variables sont relativement liées de manière positive, mais que cette relation n'est pas très forte.
+Cela signifie que lorsque la valeur d'une variable augmente, la valeur de l'autre variable a tendance à augmenter également.
+
+```{r, echo=FALSE}
+corrplot(correlation,type="upper",diag=FALSE)
+```
+
+On peut voir que: -la variable devel est fortement corrélé positivement aux variables depsoc et PIB -la variable benev est fortement corrélé négativement avec pv.ap et trv.pv -la variable pv.ap est fortement corrélé positivement à la variable trv.pv
+
+Si on s'intéresse au lien entre les variables pv.ap et trv.pv: la relation entre ces deux variables semble linéaire et ce quelque soit le pays.
+
+\newpage
+
+# 2°Analyse composantes principales (ACP)
+
+La première décison pour réaliser l'analyse est de choisir entre une ACP simple et une ACP normée.
+
+```{r, echo=FALSE}
+# Distribution empirique ACP simple des nouvelles variables
+res.pcaS=PCA(DataUE,scale.unit = FALSE,ncp = 9,graph=FALSE)
+boxplot(res.pcaS$ind$coord, main="Box plot de la distribution empirique par ACP Simple" )
+```
+
+```{r, echo=FALSE}
+# Distribution empirique ACP normée des nouvelles variables
+res.pcaN=PCA(DataUE,scale.unit = TRUE,ncp = 9,graph=FALSE)
+boxplot(res.pcaN$ind$coord, main="Box plot de la distribution empirique par ACP Normée")
+```
+
+```{r, echo=FALSE}
+knitr::kable(res.pcaN$eig)
+```
+
+Le pourcentage d'inertie est une mesure de la variance totale expliquée par chaque axe principal dans une ACP.
+Ici, les 4 premiers axes principaux expliquent pas moins de 84% de la variabilité totale des données.
+De plus, par le critère de Kaiser consistant à ne conserver que les axes dont les valeurs propres sont supérieures à 1.
+Ici, les 3 premiers axes présentent une valeur propre supérieure à 1.
+Toutefois la valeur propre d l'axe4 = 0,93 n'étant pas très loin de 1 peut être conservé.
+
+```{r, echo=FALSE}
+fviz_pca_var(res.pcaN,axes=c(1,2),col.var="cos2")
+fviz_pca_var(res.pcaN,axes=c(1,3), col.var="cos2")
+fviz_pca_var(res.pcaN,axes=c(1,4), col.var="cos2")
+
+```
+
+En comparant les 3 graphiques obtenus, on observe alors que sur le premier graphique les variables sont le mieux représentées à l'aide notamment du code couleur, où seule la variable pv.av est à une faible distance de l'origine.
+On observe par ailleurs 2 groupes allant dans 2 directions distinctes.
+Avec d'une part les indices présentant la bonne santé economique d'un pays, toutes corrélées positivement, et d'une autre part les indices présentant de la pauvreté et de l'inactivité, aussi corrélées positivement entre elles.
+Et ainsi cela montre par ailleurs que ces 2 groupes s'opposent et présentent une corrélation négative.
+
+```{r, echo=FALSE}
+fviz_pca_ind(res.pcaN, col.ind = "cos2",axes=c(1,2), repel = TRUE,pointsize = 0.7, labelsize = 3)
+```
+
+```{r, echo=FALSE}
+cos2 = rowSums(res.pcaN$ind$cos2[, 1:2])
+knitr::kable(head(cos2[order(cos2,decreasing = FALSE)])) # les individus les plus mal représentés
+```
+
+Par ce tableau, on observe alors que les pays balkans sont alors les moins bien représentés au sein de l'UE avec l'Irlande.
+
+```{r, echo=FALSE}
+cos2[names(cos2) %in% "fr"]
+```
+
+La distance mesurée de la France semble assez moyenne, cela ne montre pas un impact important de la richesse sociale française.
+
+```{r, echo=FALSE}
+head(sort(res.pcaN$ind$contrib[, 1],decreasing = TRUE))
+head(sort(res.pcaN$ind$contrib[, 2],decreasing = TRUE))
+```
+
+```{r, echo=FALSE}
+fviz_pca_biplot(res.pcaN,axes=c(1,2))
+```
+
+Il est ainsi visible que l'axe 1 oppose principalement les pays du Nord de l'Europe ayant un niveau de richesse et développement importants aux autres pays de l'Europe, de part leur modèle économique et les aides mises en place par ces Etats notamment.
+\newpage
+
+# 3°Classification non supervisée
+
+La CAH est une méthode hiérarchique qui construit une structure arborescente de groupes à partir des données en regroupant les individus les plus similaires dans des groupes successifs.
+Cette méthode nécessite de choisir une mesure de dissimilarité et une méthode d'agrégation pour fusionner les groupes.
+Dans la CAH, le lien simple, le lien complet et le lien de WARD sont des méthodes pour calculer la distance entre deux groupes d'observations (ou clusters).
+
+```{r, include=FALSE}
+DataUE.cr <- DataUE %>% scale(.,scale=TRUE, center=TRUE) #normaliser les données
+DataUE.dist <- DataUE.cr %>% dist(., method = "euclidean")
+
+```
+
+```{r, echo=FALSE}
+# Distance du lien simple
+DataUE.single<-DataUE.dist %>% hclust(., method = "single")
+fviz_dend(DataUE.single, cex = 0.5)
+```
+
+Le lien simple calcule la distance minimale entre les points les plus proches de chaque groupe.
+Autrement dit, la distance entre deux groupes est égale à la distance minimale entre toutes les paires d'observations provenant des deux groupes.
+
+```{r, echo=FALSE}
+#Distance du lien complet
+DataUE.average<-DataUE.dist %>% hclust(., method = "average")
+fviz_dend(DataUE.average, cex = 0.5)
+```
+
+Le lien complet calcule la distance maximale entre les points les plus éloignés de chaque groupe.
+Autrement dit, la distance entre deux groupes est égale à la distance maximale entre toutes les paires d'observations provenant des deux groupes.
+
+```{r, echo=FALSE}
+#Distance du lien de WARD
+DataUE.ward<-DataUE.dist^2 %>% hclust(., method = "ward.D")
+fviz_dend(DataUE.ward, cex = 0.5)
+```
+
+La méthode de WARD calcule la somme des carrés des distances entre chaque observation et la moyenne de son groupe d'appartenance, puis somme ces valeurs pour chaque groupe.
+La distance entre deux groupes est ensuite calculée comme la différence de la somme des carrés avant et après la fusion des groupes, divisée par le nombre total d'observations.
+
+On voit bien que la distance entre groupe a une forte influence sur la classification.
+La distance de Ward a été créée de façon à limiter l'augmentation de l'inertie intra-groupes à chaque étape.
+
+```{r, echo=FALSE}
+Choice_nbclust <- NbClust(data = DataUE.cr ,  distance = "euclidean", method = "ward.D2", index = "all", min.nc = 2, max.nc = 16)$Best.nc %>% t() %>% as.data.frame()
+ggplot(Choice_nbclust, aes(x = as.factor(Number_clusters))) + geom_bar() #représentation du nombre de groupes obtenus
+```
+
+Les critères sélectionnent en majorité 3 groupes.
+On peut alors représenter le dendrogramme avec ces 3 groupes.
+
+```{r, echo=FALSE}
+fviz_dend(DataUE.ward,
+k=3,
+cex = 0.8,
+palette="jco",
+rect = TRUE, rect_fill = TRUE, # Rectangle autour des groupes
+rect_border = "jco",
+labels_track_height = 70
+)
+```
+
+Ainsi, sont représentés 3 groupes de pays, que nous pouvons classifier selon leur niveau de développement: fortement développés, moyennement développés et peu développés.
+
+```{r, echo=FALSE}
+## k=3
+cluster.CAH <- DataUE.ward %>% cutree(., k =3) # on récupère les numéros des groupes
+res.pca=PCA(DataUE,scale.unit = TRUE,ncp = 4,graph=FALSE)
+fviz_pca_biplot(res.pca,axes=c(1,2),habillage=as.factor(cluster.CAH))
+```
+
+Par la classification en 3 groupes, on observe que les 3 groupes se distinguent respectivement par : 1- les pays développés avec de nombreuses dépenses publiques 2- les pays moins développés avec de forts taux de chômage 3- les pays développés avec de peu de dépenses publiques pour la société
+
+```{r, echo=FALSE}
+cluster.CAH <- DataUE.ward %>%  cutree(., k =3) # on récupère les numéros des groupes
+knitr::kable(aggregate(DataUE, by=list(as.factor(cluster.CAH)),mean),digits=1)
+```
+
+On peut voir qu'il est utile de calculer les moyennes des variables par groupe.
+De cette manière, nous pouvons plus facilement identifier les variables qui contribuent le plus à la différenciation des groupes.
+Dans ce cas présent, nous observons aisément que pour le groupe 1 la variable benev est significativement plus importante comparé aux 2 autres groupes.
+Chez le groupe 2, la principale différence réside en un PIB moyen peu élevé ( 2 fois moins que les deux autes groupes) et un chômage supérieur avoisinant les 10.Enfin, pour le 3ème groupe malgré d'importantes richesses on observe un taux de pauvreté supérieur à la moyenne pouvant justifier d'écart de richesse dans la population alors.
+
+# Conclusion
+
+Ainsi pour conclure notre analyse en partant du point de départ, nous observons dès les premières statistiques et analyses qu'il existe un lien de corrélation important entre les différentes variables 2 à 2.
+Toutefois, bien que certaines relations semblent plus significatifs que d'autres, il est compliqué d'en tirer des résultats certains.
+L'ACP nous permet alors de réduire la dimensionnalité des données, par notamment le fait qu'une dimmensionnalité de rang 4 permet d'expliquer à presque 85% la variabilité de notre jeu de donnnées.
+Mais aussi de mettre en évidence les relations entre les variables en les projetant sur un espace de dimensions inférieures permettant ainsi de distinguer 2 à 3 groupes de variables.Enfin, en s'appuyant sur une classification hiérarchique ascendante, cela nous a alors permis de regrouper les observations similaires en groupes, nous permettant à identifier des tendances communes entre les pays d'un même groupe tel qu'une économie budgétaire conséquente par différents subventionnements de l'Etat comme il en est le cas dans le groupe 1 identifié.
